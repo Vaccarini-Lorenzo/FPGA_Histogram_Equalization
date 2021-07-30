@@ -269,7 +269,6 @@ begin
         when WRITE =>
             o_en <= '1';
             o_we <= '1';
-            o_address <= std_logic_vector(w_address);
             o_data <= new_pxl;
             o_address <= std_logic_vector(w_address);
 
