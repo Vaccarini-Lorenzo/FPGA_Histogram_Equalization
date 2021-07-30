@@ -18,7 +18,6 @@
 --
 ----------------------------------------------------------------------------------
 
-
 library IEEE;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -49,20 +48,20 @@ end project_reti_logiche;
 architecture FSM of project_reti_logiche is
 
     type state_type is (RESET, START, DIM, CYCLE, TMP_STATE,UPDATE, END_CYCLE, LOG, SHIFT_STATE, LOAD_ADDRESS, LOAD_PIXEL,TMP_PIXEL, NEW_PIXEL, WRITE, DONE);
-    signal curr_state, next_state : state_type;
-    signal tmp_byte, delta, pxl : unsigned (7 downto 0);
-    signal tmp_pxl : unsigned (15 downto 0);
+    signal curr_state, next_state: state_type;
+    signal tmp_byte, delta, pxl: unsigned (7 downto 0);
+    signal tmp_pxl: unsigned (15 downto 0);
     signal pxl_addr: unsigned (15 downto 0);
-    signal shift_level, log_delta : unsigned (3 downto 0);
-    signal address, w_address, counter, dimension, tmp_counter, tmp_address, tmp_waddress : unsigned(15 downto 0);
-    signal min : unsigned(7 downto 0);
-    signal max : unsigned(7 downto 0);
-    signal new_pxl : std_logic_vector(7 downto 0);
+    signal shift_level, log_delta: unsigned (3 downto 0);
+    signal address, tmp_address, w_address, tmp_waddress, counter, tmp_counter, dimension: unsigned(15 downto 0);
+    signal min: unsigned(7 downto 0);
+    signal max: unsigned(7 downto 0);
+    signal new_pxl: std_logic_vector(7 downto 0);
     signal flag: std_logic;
 
 
 begin
-
+    -- Update the current state
     state_update: process(i_clk, i_rst)
     begin
         if (i_rst = '1') then
@@ -70,12 +69,14 @@ begin
         elsif rising_edge(i_clk) then
             curr_state <= next_state;
         end if;
-   end process;
+    end process;
 
+    -- Update the next state
     transition_function: process(i_clk)
     begin
     if rising_edge(i_clk) then
         next_state <= RESET;
+        
         case curr_state is
         when RESET =>
             if (i_start = '1') then
@@ -132,7 +133,7 @@ begin
         when NEW_PIXEL =>
             next_state <= WRITE;
 
-       when WRITE =>
+        when WRITE =>
             if (counter > 1) then
                 next_state <= LOAD_ADDRESS;
             else
@@ -146,17 +147,20 @@ begin
                 next_state <= RESET;
             end if;
         end case;
-   end if;
-   end process;
+        
+    end if;
+    end process;
    
-   output_function: process(i_clk)
-   begin
-   if rising_edge(i_clk) then
+   -- Define the output signals
+    output_function: process(i_clk)
+    begin
+    if rising_edge(i_clk) then
         o_en <= '0';
         o_address <= "0000000000000000";
         o_done <= '0';
         o_we <= '0';
         o_data <= "XXXXXXXX";
+        
         case curr_state is
         when RESET =>
             pxl <= "XXXXXXXX";
@@ -190,9 +194,9 @@ begin
             end if;
 
         when CYCLE =>
+            o_en <= '1';
             counter <= tmp_counter;
             address <= tmp_address;
-            o_en <= '1';
             o_address <= std_logic_vector(tmp_address);
 
         when UPDATE =>
@@ -234,17 +238,16 @@ begin
             flag <= '1';
 
         when LOAD_ADDRESS =>
+            o_en <= '1';
             if (flag = '1') then
                 w_address <= address;
                 o_address <= std_logic_vector(pxl_addr);
-
             else
                 o_address <= std_logic_vector(tmp_address);
                 pxl_addr <= tmp_address;
                 w_address <= tmp_waddress;
                 counter <= tmp_counter;
             end if;
-            o_en <= '1';
 
         when LOAD_PIXEL =>
             flag <= '0';
@@ -262,8 +265,8 @@ begin
             else
                 new_pxl <= std_logic_vector(tmp_pxl(7 downto 0));
             end if;
-
-       when WRITE =>
+            
+        when WRITE =>
             o_en <= '1';
             o_we <= '1';
             o_address <= std_logic_vector(w_address);
@@ -273,7 +276,8 @@ begin
         when DONE =>
             o_done <= '1';
         end case;
-   end if;
-   end process;
-
+        
+    end if;
+    end process;
+    
 end FSM;
