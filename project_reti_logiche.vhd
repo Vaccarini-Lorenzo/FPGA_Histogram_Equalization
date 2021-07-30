@@ -47,18 +47,15 @@ end project_reti_logiche;
 
 architecture FSM of project_reti_logiche is
 
-    type state_type is (RESET, START, DIM, CYCLE, TMP_STATE,UPDATE, END_CYCLE, LOG, SHIFT_STATE, LOAD_ADDRESS, LOAD_PIXEL,TMP_PIXEL, NEW_PIXEL, WRITE, DONE);
+    type state_type is (RESET, START, DIM, CYCLE, UPDATE, SHIFT_LVL, LOAD_ADDRESS, LOAD_PIXEL, NEW_PIXEL, WRITE, DONE);
     signal curr_state, next_state: state_type;
-    signal tmp_byte, delta, pxl: unsigned (7 downto 0);
+    signal tmp_byte, min, max: unsigned (7 downto 0);
+    signal shift_level: unsigned (3 downto 0);
     signal tmp_pxl: unsigned (15 downto 0);
     signal pxl_addr: unsigned (15 downto 0);
-    signal shift_level, log_delta: unsigned (3 downto 0);
     signal address, tmp_address, w_address, tmp_waddress, counter, tmp_counter, dimension: unsigned(15 downto 0);
-    signal min: unsigned(7 downto 0);
-    signal max: unsigned(7 downto 0);
     signal new_pxl: std_logic_vector(7 downto 0);
-    signal flag: std_logic;
-
+    signal first_pixel: std_logic;
 
 begin
     -- Update the current state
@@ -94,40 +91,28 @@ begin
 
         when DIM =>
             if (unsigned(i_data) /= "00000000") then
-                next_state <= TMP_STATE;
+                next_state <= CYCLE;
             else
                 next_state <= DONE;
             end if;
 
-        when TMP_STATE =>
+        when CYCLE =>
             if (counter > 0) then
-                next_state <= CYCLE;
+                next_state <= UPDATE;
             else
-                next_state <= END_CYCLE;
+                next_state <= SHIFT_LVL;
             end if;
 
-        when CYCLE =>
-            next_state <= UPDATE;
-
         when UPDATE =>
-            next_state <= TMP_STATE;
+            next_state <= CYCLE;
 
-        when END_CYCLE =>
-            next_state <= LOG;
-
-        when LOG =>
-            next_state <= SHIFT_STATE;
-
-        when SHIFT_STATE =>
+        when SHIFT_LVL =>
             next_state <= LOAD_ADDRESS;
 
         when LOAD_ADDRESS =>
             next_state <= LOAD_PIXEL;
 
         when LOAD_PIXEL =>
-            next_state <= TMP_PIXEL;
-
-        when TMP_PIXEL =>
             next_state <= NEW_PIXEL;
 
         when NEW_PIXEL =>
@@ -163,11 +148,7 @@ begin
         
         case curr_state is
         when RESET =>
-            pxl <= "XXXXXXXX";
-            tmp_pxl <= "XXXXXXXXXXXXXXXX";
-            new_pxl <= "XXXXXXXX";
-            shift_level <= "XXXX";
-            flag <= '1';
+            first_pixel <= '1';
             pxl_addr <= "0000000000000010";
             min <= "11111111";
             max <= "00000000";
@@ -185,61 +166,54 @@ begin
             counter <= unsigned(i_data)* tmp_byte;
             address <= "0000000000000001";
 
-        when TMP_STATE =>
+        when CYCLE =>
             if (counter > 0) then
+                o_en <= '1';
+                o_address <= std_logic_vector(address + 1);
                 tmp_counter <= counter - 1;
                 tmp_address <= address + 1;
             else
                 tmp_address <= address + 1;
             end if;
 
-        when CYCLE =>
-            o_en <= '1';
+        when UPDATE =>
             counter <= tmp_counter;
             address <= tmp_address;
-            o_address <= std_logic_vector(tmp_address);
-
-        when UPDATE =>
             if (unsigned(i_data) < min) then
                 min <= unsigned(i_data);
             elsif (unsigned(i_data) > max) then
                 max <= unsigned(i_data);
             end if;
-
-        when END_CYCLE =>
-            address <= tmp_address;
-            delta <= max - min;
-
-        when LOG =>
-            if (delta = 255) then
-                log_delta <= "1000";
-            elsif((delta +1) < 256 and (delta +1) > 127 ) then
-                log_delta <= "0111";
-            elsif((delta +1) < 128 and (delta +1) > 63) then
-                log_delta <= "0110";
-            elsif((delta +1) < 64 and (delta +1) > 31) then
-                log_delta <= "0101";
-            elsif((delta +1) < 32 and (delta +1) > 15) then
-                log_delta <= "0100";
-            elsif((delta +1) < 16 and (delta +1) > 7) then
-                log_delta <= "0011";
-            elsif((delta +1) < 8 and (delta +1) > 3) then
-                log_delta <= "0010";
-            elsif((delta +1) < 4 and (delta +1) > 1) then
-                log_delta <= "0001";
+            
+        when SHIFT_LVL =>
+            -- Computing shift level
+            if (max - min = 255) then
+                shift_level <= "0000";
+            elsif((max - min +1) < 256 and (max - min +1) > 127 ) then
+                shift_level <= "0001";
+            elsif((max - min +1) < 128 and (max - min +1) > 63) then
+                shift_level <= "0010";
+            elsif((max - min +1) < 64 and (max - min +1) > 31) then
+                shift_level <= "0011";
+            elsif((max - min +1) < 32 and (max - min +1) > 15) then
+                shift_level <= "0100";
+            elsif((max - min +1) < 16 and (max - min +1) > 7) then
+                shift_level <= "0101";
+            elsif((max - min +1) < 8 and (max - min +1) > 3) then
+                shift_level <= "0110";
+            elsif((max - min +1) < 4 and (max - min +1) > 1) then
+                shift_level <= "0111";
             else
-                log_delta <= "0000";
+                shift_level <= "1000";
             end if;
+            
+            address <= tmp_address;
             counter <= dimension;
-
-        when SHIFT_STATE =>
             o_en <= '1';
-            shift_level <= "1000" - log_delta(3 downto 0);
-            flag <= '1';
-
+            
         when LOAD_ADDRESS =>
             o_en <= '1';
-            if (flag = '1') then
+            if (first_pixel = '1') then
                 w_address <= address;
                 o_address <= std_logic_vector(pxl_addr);
             else
@@ -250,16 +224,15 @@ begin
             end if;
 
         when LOAD_PIXEL =>
-            flag <= '0';
+            first_pixel <= '0';
             tmp_counter <= counter - 1;
             tmp_address <= pxl_addr + 1;
             tmp_waddress <= w_address + 1;
-            pxl <= unsigned(i_data);
-
-        when TMP_PIXEL =>
-            tmp_pxl <= unsigned(shift_left("0000000000000000" + (pxl - min), to_integer(shift_level)));
+            -- Reading the pixel from i_data and computing the equalized version
+            tmp_pxl <= unsigned(shift_left("0000000000000000" + (unsigned(i_data) - min), to_integer(shift_level)));
 
         when NEW_PIXEL =>
+            -- Managing possible > 255 values
             if tmp_pxl > "0000000011111111" then
                 new_pxl <= "11111111";
             else
