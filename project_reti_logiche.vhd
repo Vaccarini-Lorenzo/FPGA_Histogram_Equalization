@@ -45,7 +45,7 @@ o_data: out std_logic_vector (7 downto 0)
 );
 end project_reti_logiche;
 
-architecture FSM of project_reti_logiche is
+architecture Behavioral of project_reti_logiche is
 
     type state_type is (RESET, START, DIM, CYCLE, UPDATE, SHIFT_LVL, LOAD_ADDRESS, LOAD_PIXEL, NEW_PIXEL, WRITE, DONE);
     signal curr_state, next_state: state_type;
@@ -53,9 +53,9 @@ architecture FSM of project_reti_logiche is
     signal shift_level: unsigned (3 downto 0);
     signal tmp_pxl: unsigned (15 downto 0);
     signal pxl_addr: unsigned (15 downto 0);
-    signal address, tmp_address, w_address, tmp_waddress, counter, tmp_counter, dimension: unsigned(15 downto 0);
+    signal r_address, next_r_address, w_address, next_w_address, counter, next_counter, dimension: unsigned(15 downto 0);
     signal new_pxl: std_logic_vector(7 downto 0);
-    signal first_pixel: std_logic;
+    signal first_pixel_flag: std_logic;
 
 begin
     -- Update the current state
@@ -69,7 +69,7 @@ begin
     end process;
 
     -- Update the next state
-    transition_function: process(i_clk)
+    lambda: process(i_clk)
     begin
     if rising_edge(i_clk) then
         next_state <= RESET;
@@ -135,9 +135,9 @@ begin
         
     end if;
     end process;
-   
-   -- Define the output signals
-    output_function: process(i_clk)
+    
+    -- Define output and internal signals
+    delta: process(i_clk)
     begin
     if rising_edge(i_clk) then
         o_en <= '0';
@@ -148,7 +148,7 @@ begin
         
         case curr_state is
         when RESET =>
-            first_pixel <= '1';
+            first_pixel_flag <= '1';
             pxl_addr <= "0000000000000010";
             min <= "11111111";
             max <= "00000000";
@@ -164,21 +164,21 @@ begin
         when DIM =>
             dimension <= unsigned(i_data) * tmp_byte;
             counter <= unsigned(i_data)* tmp_byte;
-            address <= "0000000000000001";
+            r_address <= "0000000000000001";
 
         when CYCLE =>
             if (counter > 0) then
                 o_en <= '1';
-                o_address <= std_logic_vector(address + 1);
-                tmp_counter <= counter - 1;
-                tmp_address <= address + 1;
+                o_address <= std_logic_vector(r_address + 1);
+                next_counter <= counter - 1;
+                next_r_address <= r_address + 1;
             else
-                tmp_address <= address + 1;
+                next_r_address <= r_address + 1;
             end if;
 
         when UPDATE =>
-            counter <= tmp_counter;
-            address <= tmp_address;
+            counter <= next_counter;
+            r_address <= next_r_address;
             if (unsigned(i_data) < min) then
                 min <= unsigned(i_data);
             elsif (unsigned(i_data) > max) then
@@ -207,27 +207,27 @@ begin
                 shift_level <= "1000";
             end if;
             
-            address <= tmp_address;
+            r_address <= next_r_address;
             counter <= dimension;
             o_en <= '1';
             
         when LOAD_ADDRESS =>
             o_en <= '1';
-            if (first_pixel = '1') then
-                w_address <= address;
+            if (first_pixel_flag = '1') then
+                w_address <= r_address;
                 o_address <= std_logic_vector(pxl_addr);
             else
-                o_address <= std_logic_vector(tmp_address);
-                pxl_addr <= tmp_address;
-                w_address <= tmp_waddress;
-                counter <= tmp_counter;
+                o_address <= std_logic_vector(next_r_address);
+                pxl_addr <= next_r_address;
+                w_address <= next_w_address;
+                counter <= next_counter;
             end if;
 
         when LOAD_PIXEL =>
-            first_pixel <= '0';
-            tmp_counter <= counter - 1;
-            tmp_address <= pxl_addr + 1;
-            tmp_waddress <= w_address + 1;
+            first_pixel_flag <= '0';
+            next_counter <= counter - 1;
+            next_r_address <= pxl_addr + 1;
+            next_w_address <= w_address + 1;
             -- Reading the pixel from i_data and computing the equalized version
             tmp_pxl <= unsigned(shift_left("0000000000000000" + (unsigned(i_data) - min), to_integer(shift_level)));
 
@@ -252,4 +252,4 @@ begin
     end if;
     end process;
     
-end FSM;
+end Behavioral;
