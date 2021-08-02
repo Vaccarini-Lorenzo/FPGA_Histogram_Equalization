@@ -181,7 +181,8 @@ begin
             r_address <= next_r_address;
             if (unsigned(i_data) < min) then
                 min <= unsigned(i_data);
-            elsif (unsigned(i_data) > max) then
+            end if;
+            if (unsigned(i_data) > max) then
                 max <= unsigned(i_data);
             end if;
             
