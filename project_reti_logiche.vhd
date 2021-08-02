@@ -71,7 +71,7 @@ begin
     -- Update the next state
     lambda: process(i_clk)
     begin
-    if rising_edge(i_clk) then
+    if falling_edge(i_clk) then
         next_state <= RESET;
         
         case curr_state is
@@ -139,7 +139,7 @@ begin
     -- Define output and internal signals
     delta: process(i_clk)
     begin
-    if rising_edge(i_clk) then
+    if falling_edge(i_clk) then
         o_en <= '0';
         o_address <= "0000000000000000";
         o_done <= '0';
